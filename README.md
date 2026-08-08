@@ -11,21 +11,28 @@ python3 -m http.server 8787
 # open http://127.0.0.1:8787
 ```
 
-## Deploy (Cloudflare Pages via GitHub Actions)
+## How production works
 
-On every push to `main`, GitHub Actions deploys this folder to Cloudflare Pages.
+**https://yoga.lerwenliu.org** is a Cloudflare Worker that serves files **live from this GitHub repo** (`main` branch via `raw.githubusercontent.com`).
 
-### One-time setup
+Update the site by pushing to `main` — no separate deploy step required (allow ~1 minute for cache).
 
-1. Create a Cloudflare API token  
-   [Create token](https://dash.cloudflare.com/profile/api-tokens) → **Edit Cloudflare Workers** template  
-   (needs Account → Cloudflare Pages → Edit, and Account → Account Settings → Read)
-2. In this GitHub repo → **Settings → Secrets and variables → Actions**, add:
-   - `CLOUDFLARE_API_TOKEN` — the token
-   - `CLOUDFLARE_ACCOUNT_ID` — `42d998688b843019809c9e00ed78abaf`
-3. Push to `main` (or re-run the **Deploy** workflow)
+```bash
+git add -A && git commit -m "Update yoga app" && git push
+```
 
-Custom domain: `yoga.lerwenliu.org` (Cloudflare Pages project `yoga-posture-detection`).
+### Optional: Cloudflare Pages + GitHub Actions
+
+If you prefer Pages CI instead of the Worker proxy, add a workflow (needs `workflow` scope on your `gh` token) and secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID` = `42d998688b843019809c9e00ed78abaf`
+
+Example command:
+
+```bash
+npx wrangler pages deploy . --project-name=yoga-posture-detection --branch=main
+```
 
 ## Stack
 
