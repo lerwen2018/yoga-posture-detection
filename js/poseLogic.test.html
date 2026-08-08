@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pose logic smoke test</title>
+  </head>
+  <body>
+    <pre id="out">running…</pre>
+    <script type="module">
+      import { matchPoses } from "./poseLogic.js";
+      const out = document.getElementById("out");
+      const live = {
+        left_elbow: 170,
+        right_elbow: 170,
+        left_shoulder: 10,
+        right_shoulder: 10,
+        left_hip: 175,
+        right_hip: 175,
+        left_knee: 175,
+        right_knee: 175,
+      };
+      const matches = matchPoses(live);
+      const top = matches[0];
+      const ok = top.pose.name === "Mountain Pose" && top.score > 90;
+      out.textContent = ok
+        ? `PASS: ${top.pose.name} ${top.score.toFixed(1)}%`
+        : `FAIL: ${JSON.stringify(top)}`;
+    </script>
+  </body>
+</html>
