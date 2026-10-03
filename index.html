@@ -2,11 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b1210" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Yoga Posture Detection</title>
     <meta
       name="description"
-      content="Local-in-browser yoga pose detection with skeleton overlay and recommendations. Powered by MediaPipe."
+      content="On-device yoga pose detection, live coaching and games. Runs entirely in your browser with MediaPipe."
     />
     <link rel="stylesheet" href="/css/styles.css" />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
@@ -18,133 +25,354 @@
     />
   </head>
   <body>
-    <div class="app">
+    <div class="bg-orbs" aria-hidden="true"></div>
+
+    <div class="app" id="app">
       <header class="topbar">
-        <div class="brand">
+        <button class="brand" id="brandBtn" type="button" aria-label="Home">
           <span class="brand-mark" aria-hidden="true">✦</span>
-          <div>
-            <h1>Yoga Posture Detection</h1>
-            <p class="tagline">On-device AI · runs in your browser</p>
-          </div>
-        </div>
+          <span class="brand-text">
+            <strong>Yoga Posture Detection</strong>
+            <small>On-device AI · private by design</small>
+          </span>
+        </button>
         <div class="topbar-meta">
-          <span id="statusBadge" class="badge badge-idle">Idle</span>
-          <span id="fpsLabel" class="meta-text">— FPS</span>
+          <span id="topStatus" class="badge badge-idle">Idle</span>
+          <button
+            id="soundBtn"
+            class="icon-btn"
+            type="button"
+            aria-label="Toggle sound"
+            title="Sound on/off"
+          >
+            🔊
+          </button>
         </div>
       </header>
 
-      <main class="layout">
-        <section class="stage-panel">
-          <div class="video-wrap" id="videoWrap">
-            <video id="video" playsinline autoplay muted></video>
-            <canvas id="canvas"></canvas>
-            <div id="overlayEmpty" class="overlay-empty">
-              <div class="empty-card">
-                <h2>Ready when you are</h2>
-                <p>
-                  Allow camera access, stand so your full body is visible, then
-                  hold a yoga pose. Detection runs <strong>locally</strong> —
-                  nothing is uploaded.
-                </p>
-                <button id="startBtn" class="btn btn-primary" type="button">
-                  Start camera
-                </button>
-                <p id="errorText" class="error-text" hidden></p>
-              </div>
-            </div>
-          </div>
-          <div class="stage-controls">
-            <button id="stopBtn" class="btn btn-ghost" type="button" disabled>
-              Stop
+      <!-- ============ HOME ============ -->
+      <main id="screen-home" class="screen is-active">
+        <section class="hero">
+          <p class="hero-kicker">Camera in browser · nothing uploaded</p>
+          <h1 class="hero-title">
+            Find your <em>flow</em>, one breath at a time.
+          </h1>
+          <p class="hero-sub">
+            Real-time pose detection and joint-by-joint coaching. Pick a mode
+            below, play a game, or go hands-free and control everything with
+            your camera.
+          </p>
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" data-mode="auto" type="button">
+              Start free flow
             </button>
-            <button id="modeAutoBtn" class="btn btn-chip active" type="button">
-              Auto detect
+            <button class="btn btn-ghost btn-lg" data-screen="library" type="button">
+              Pose library
             </button>
-            <button id="modePracticeBtn" class="btn btn-chip" type="button">
-              Practice
-            </button>
-            <label class="mirror-toggle">
-              <input type="checkbox" id="mirrorToggle" checked />
-              Mirror view
-            </label>
           </div>
         </section>
 
-        <aside class="side-panel">
-          <div class="card">
-            <p class="card-label">Detected pose</p>
-            <h2 id="poseName">—</h2>
-            <p id="poseSanskrit" class="sanskrit">Stand in frame to begin</p>
-            <div class="score-row">
-              <span id="scoreValue" class="score">0%</span>
-              <div class="score-bar">
-                <div id="scoreFill" class="score-fill" style="width: 0%"></div>
-              </div>
-            </div>
-            <div class="pill-row">
-              <p id="poseDifficulty" class="pill">—</p>
-              <p id="formLevelPill" class="pill pill-form">—</p>
-            </div>
+        <section class="section">
+          <div class="section-head">
+            <h2>Choose a mode</h2>
+            <span class="section-sub" id="modeHint">Switch anytime</span>
           </div>
+          <div class="mode-grid" id="modeGrid"></div>
+        </section>
 
-          <div class="card card-coach" id="coachCard">
-            <p class="card-label">How to improve</p>
-            <p id="coachSummary" class="coach-summary">
-              Start the camera and hold a pose — we’ll coach joint by joint.
-            </p>
-            <ol id="coachList" class="coach-list">
-              <li class="coach-item coach-idle">
-                <span class="coach-step">1</span>
-                <div>
-                  <strong>Stand in full view</strong>
-                  <p>Head to feet visible, good lighting, face the camera.</p>
-                </div>
-              </li>
-              <li class="coach-item coach-idle">
-                <span class="coach-step">2</span>
-                <div>
-                  <strong>Hold still for a second</strong>
-                  <p>Let the score settle, then follow the top cue.</p>
-                </div>
-              </li>
-            </ol>
-            <div id="jointMeters" class="joint-meters" hidden></div>
+        <section class="section">
+          <div class="section-head">
+            <h2>Your progress</h2>
+            <span class="section-sub">Saved on this device</span>
           </div>
-
-          <div class="card card-accent">
-            <p class="card-label">Recommended next</p>
-            <h3 id="recName">—</h3>
-            <p id="recDesc" class="muted">Hold a pose to get a suggestion</p>
-            <ul id="recTips" class="tips"></ul>
-          </div>
-
-          <div class="card">
-            <p class="card-label">Closest matches</p>
-            <ol id="matchList" class="match-list">
-              <li class="muted">Waiting for pose…</li>
-            </ol>
-          </div>
-
-          <div class="card card-compact">
-            <p class="card-label">Practice target</p>
-            <div class="practice-row">
-              <select id="poseSelect" disabled></select>
-              <button id="cyclePoseBtn" class="btn btn-ghost" type="button" disabled>
-                Next
-              </button>
-            </div>
-            <p id="practiceHint" class="muted small">
-              Practice mode locks a pose so coaching targets that shape only.
-            </p>
-          </div>
-        </aside>
+          <div class="quick-stats" id="quickStats"></div>
+        </section>
       </main>
 
-      <footer class="footer">
-        <span>MediaPipe Pose Landmarker · local WASM model</span>
-        <span>Ready for Cloudflare Workers static hosting</span>
-      </footer>
+      <!-- ============ LIBRARY ============ -->
+      <main id="screen-library" class="screen">
+        <section class="section">
+          <div class="section-head">
+            <h2>Pose library</h2>
+            <span class="section-sub">10 poses</span>
+          </div>
+          <div class="filter-row" id="difficultyFilter">
+            <button class="btn btn-chip active" data-difficulty="all" type="button">
+              All
+            </button>
+            <button class="btn btn-chip" data-difficulty="beginner" type="button">
+              Beginner
+            </button>
+            <button class="btn btn-chip" data-difficulty="intermediate" type="button">
+              Intermediate
+            </button>
+          </div>
+          <div class="pose-grid" id="libraryGrid"></div>
+        </section>
+      </main>
+
+      <!-- ============ STATS ============ -->
+      <main id="screen-stats" class="screen">
+        <section class="section">
+          <div class="section-head">
+            <h2>Your stats</h2>
+            <span class="section-sub">Stored locally</span>
+          </div>
+          <div id="statsContent"></div>
+        </section>
+      </main>
     </div>
+
+    <!-- ============ BOTTOM TABS ============ -->
+    <nav class="tabbar" id="tabbar" aria-label="Primary">
+      <button class="tab-icon is-active" data-screen="home" type="button">
+        <span aria-hidden="true">⌂</span><small>Home</small>
+      </button>
+      <button class="tab-icon" data-mode="auto" type="button">
+        <span aria-hidden="true">◉</span><small>Camera</small>
+      </button>
+      <button class="tab-icon" data-screen="library" type="button">
+        <span aria-hidden="true">☷</span><small>Library</small>
+      </button>
+      <button class="tab-icon" data-screen="stats" type="button">
+        <span aria-hidden="true">▲</span><small>Stats</small>
+      </button>
+    </nav>
+
+    <!-- ============ LIVE CAMERA ============ -->
+    <section id="screen-live" class="screen screen-live" aria-label="Live camera">
+      <div class="live-stage">
+        <div class="video-wrap" id="videoWrap">
+          <video id="video" playsinline autoplay muted></video>
+          <canvas id="canvas"></canvas>
+
+          <!-- Empty / start state -->
+          <div id="overlayEmpty" class="overlay-empty">
+            <div class="empty-card">
+              <span class="empty-emoji" id="emptyEmoji" aria-hidden="true">🧘</span>
+              <h2 id="emptyTitle">Ready when you are</h2>
+              <p id="emptyText">
+                Allow camera access, stand so your full body is visible, then hold
+                a yoga pose. Detection runs <strong>locally</strong> — nothing is
+                uploaded.
+              </p>
+              <button id="startBtn" class="btn btn-primary btn-lg" type="button">
+                Start camera
+              </button>
+              <p id="errorText" class="error-text" hidden></p>
+            </div>
+          </div>
+
+          <!-- Top overlay HUD -->
+          <div class="live-overlay-top">
+            <div class="hud-row">
+              <button id="backBtn" class="icon-btn glass" type="button" aria-label="Back">
+                ←
+              </button>
+              <span id="statusBadge" class="badge badge-idle">Idle</span>
+              <span id="modeBadge" class="badge badge-mode">Free Flow</span>
+              <span class="hud-spacer"></span>
+              <span id="fpsLabel" class="meta-text">— FPS</span>
+              <button
+                id="gestureBtn"
+                class="icon-btn glass"
+                type="button"
+                aria-label="Toggle gesture control"
+                title="Hands-free gesture control"
+              >
+                🖐
+              </button>
+              <button
+                id="flipBtn"
+                class="icon-btn glass"
+                type="button"
+                aria-label="Flip camera"
+                title="Flip camera"
+                hidden
+              >
+                🔄
+              </button>
+              <button
+                id="mirrorBtn"
+                class="icon-btn glass is-on"
+                type="button"
+                aria-label="Toggle mirror"
+                title="Mirror view"
+              >
+                ⇄
+              </button>
+            </div>
+
+            <div class="game-strip" id="gameStrip" hidden>
+              <div class="game-stat">
+                <span class="game-stat-label">Time</span>
+                <strong id="gameTime">60</strong>
+              </div>
+              <div class="game-stat">
+                <span class="game-stat-label">Score</span>
+                <strong id="gameScore">0</strong>
+              </div>
+              <div class="game-stat">
+                <span class="game-stat-label">Combo</span>
+                <strong id="gameCombo">×0</strong>
+              </div>
+            </div>
+
+            <div class="target-chip" id="targetChip" hidden>
+              <div class="target-row">
+                <span class="target-label">Hold</span>
+                <strong id="targetPoseName">—</strong>
+              </div>
+              <div class="hold-bar"><i id="holdFill"></i></div>
+            </div>
+          </div>
+
+          <!-- Bottom overlay -->
+          <div class="live-overlay-bottom">
+            <div class="pose-name-chip" id="poseNameChip">
+              <strong id="poseName">—</strong>
+              <span id="poseSanskrit">Stand in frame to begin</span>
+            </div>
+            <div class="score-ring" id="scoreRing">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+                <circle class="ring-fg" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <span id="scoreValue">0%</span>
+            </div>
+          </div>
+
+          <div id="coachBanner" class="coach-banner">
+            <strong></strong><span></span>
+          </div>
+
+          <!-- Hands-free gesture controls -->
+          <div id="gestureBar" class="gesture-bar" hidden>
+            <p class="gesture-hint" id="gestureHint">
+              🖐 Point at a button and hold to activate
+            </p>
+            <div class="gesture-targets" id="gestureTargets"></div>
+          </div>
+
+          <!-- Pre-game / results overlays -->
+          <div id="gameIntro" class="overlay-center" hidden>
+            <div class="center-card">
+              <span class="center-emoji" id="introEmoji" aria-hidden="true">⚡</span>
+              <h2 id="introTitle">Pose Rush</h2>
+              <p id="introText">Hold each pose before the clock runs out.</p>
+              <button id="introStartBtn" class="btn btn-primary btn-lg" type="button">
+                Start
+              </button>
+              <button id="introSkipBtn" class="btn btn-ghost" type="button">
+                Just practice
+              </button>
+            </div>
+          </div>
+
+          <div id="resultsOverlay" class="overlay-center" hidden>
+            <div class="center-card results-card">
+              <span class="center-emoji" id="resultEmoji" aria-hidden="true">🏆</span>
+              <h2 id="resultTitle">Nice flow!</h2>
+              <p id="resultSub" class="muted"></p>
+              <div class="result-grid" id="resultGrid"></div>
+              <div class="result-best" id="resultBest"></div>
+              <div class="result-actions">
+                <button id="replayBtn" class="btn btn-primary" type="button">
+                  Play again
+                </button>
+                <button id="resultsHomeBtn" class="btn btn-ghost" type="button">
+                  Home
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom sheet -->
+        <aside class="live-sheet" id="liveSheet">
+          <button class="sheet-handle" id="sheetHandle" type="button" aria-label="Expand panel">
+            <span></span>
+          </button>
+
+          <div class="mode-switch" id="modeSwitch" role="tablist"></div>
+
+          <div class="pane-tabs" id="paneTabs" role="tablist">
+            <button class="pane-tab is-active" data-pane="coach" type="button">
+              Coach
+            </button>
+            <button class="pane-tab" data-pane="details" type="button">
+              Details
+            </button>
+          </div>
+
+          <div class="sheet-scroll">
+            <section class="sheet-pane is-active" id="pane-coach">
+              <div class="row-between">
+                <p class="card-label">Live coaching</p>
+                <p id="formLevelPill" class="pill pill-form">—</p>
+              </div>
+              <p id="coachSummary" class="coach-summary">
+                Start the camera and hold a pose — we’ll coach joint by joint.
+              </p>
+              <ol id="coachList" class="coach-list"></ol>
+              <div id="jointMeters" class="joint-meters" hidden></div>
+            </section>
+
+            <section class="sheet-pane" id="pane-details">
+              <div class="card-inline">
+                <p class="card-label">Detected pose</p>
+                <h3 id="detailPoseName">—</h3>
+                <p id="detailPoseSanskrit" class="sanskrit">Stand in frame</p>
+                <div class="pill-row">
+                  <p id="poseDifficulty" class="pill">—</p>
+                  <p id="matchTop" class="pill">—</p>
+                </div>
+              </div>
+
+              <div class="card-inline">
+                <p class="card-label">How to improve</p>
+                <p id="detailCoach" class="muted">—</p>
+              </div>
+
+              <div class="card-inline card-accent">
+                <p class="card-label">Recommended next</p>
+                <h3 id="recName">—</h3>
+                <p id="recDesc" class="muted">Hold a pose to get a suggestion</p>
+                <ul id="recTips" class="tips"></ul>
+              </div>
+
+              <div class="card-inline">
+                <p class="card-label">Closest matches</p>
+                <ol id="matchList" class="match-list">
+                  <li class="muted">Waiting for pose…</li>
+                </ol>
+              </div>
+
+              <div class="card-inline">
+                <p class="card-label">Practice target</p>
+                <div class="practice-row">
+                  <select id="poseSelect"></select>
+                  <button id="cyclePoseBtn" class="btn btn-ghost" type="button">
+                    Next
+                  </button>
+                </div>
+                <p id="practiceHint" class="muted small">
+                  Practice mode locks a pose so coaching targets that shape only.
+                </p>
+              </div>
+
+              <div class="card-inline">
+                <button id="stopBtn" class="btn btn-ghost btn-block" type="button" disabled>
+                  Stop camera
+                </button>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script type="module" src="/js/app.js"></script>
   </body>
