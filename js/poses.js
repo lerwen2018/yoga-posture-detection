@@ -47,6 +47,7 @@ export const POSES = [
     name: "Warrior II",
     sanskrit: "Virabhadrasana II",
     difficulty: "beginner",
+    tolerance: 1.15,
     description: "Front knee bent ~90°, arms stretched out to the sides.",
     tips: [
       "Front thigh parallel to the floor if possible",
@@ -68,6 +69,7 @@ export const POSES = [
     name: "Warrior I",
     sanskrit: "Virabhadrasana I",
     difficulty: "beginner",
+    tolerance: 1.15,
     description: "Lunge with front knee bent, arms raised overhead.",
     tips: [
       "Square hips toward the front",
@@ -110,6 +112,7 @@ export const POSES = [
     name: "Goddess Pose",
     sanskrit: "Utkata Konasana",
     difficulty: "beginner",
+    tolerance: 1.2,
     description: "Wide stance, knees bent, thighs open, arms in cactus shape.",
     tips: [
       "Knees track over toes",
@@ -131,6 +134,7 @@ export const POSES = [
     name: "Chair Pose",
     sanskrit: "Utkatasana",
     difficulty: "beginner",
+    tolerance: 1.3,
     description: "Sit back as if into a chair; arms reach up.",
     tips: [
       "Weight in the heels",
@@ -152,6 +156,7 @@ export const POSES = [
     name: "Downward Dog",
     sanskrit: "Adho Mukha Svanasana",
     difficulty: "beginner",
+    tolerance: 1.2,
     description: "Inverted V — hands and feet on floor, hips high.",
     tips: [
       "Press hands firmly, fingers spread",
@@ -173,6 +178,7 @@ export const POSES = [
     name: "Warrior III",
     sanskrit: "Virabhadrasana III",
     difficulty: "intermediate",
+    tolerance: 1.25,
     description: "Balance on one leg; torso and other leg form a T-shape.",
     tips: [
       "Hips level, facing the floor",
@@ -194,6 +200,7 @@ export const POSES = [
     name: "Triangle Pose",
     sanskrit: "Trikonasana",
     difficulty: "intermediate",
+    tolerance: 1.2,
     description: "Wide stance, one hand toward shin/floor, other arm skyward.",
     tips: [
       "Stack shoulders vertically",

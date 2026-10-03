@@ -14,7 +14,7 @@ import {
   DrawingUtils,
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
 
-import { POSES, SKELETON_EDGES } from "./poses.js";
+import { POSES, SKELETON_EDGES, JOINT_DEFS } from "./poses.js";
 import {
   computeAngles,
   matchPoses,
@@ -24,6 +24,7 @@ import {
   ScoreSmoother,
 } from "./poseLogic.js";
 import { PoseGame, GAME_PRESETS, FLOW_PRESETS } from "./games.js";
+import { drawGuideCard, mapGuideToBody, hasGuide, POSE_GUIDES } from "./guide.js";
 import { loadStats, recordSession, resetStats } from "./storage.js";
 
 /* ------------------------------------------------------------------ *
@@ -141,7 +142,8 @@ const el = {
   scoreValue: $("scoreValue"),
   scoreRing: $("scoreRing"),
   ringFg: document.querySelector(".score-ring .ring-fg"),
-  coachBanner: $("coachBanner"),
+  poseGuide: $("poseGuide"),
+  guideCanvas: $("guideCanvas"),
   gameIntro: $("gameIntro"),
   introEmoji: $("introEmoji"),
   introTitle: $("introTitle"),
@@ -181,9 +183,8 @@ const el = {
   toast: $("toast"),
 };
 
-const coachBannerTitle = el.coachBanner.querySelector("strong");
-const coachBannerDetail = el.coachBanner.querySelector("span");
 const ctx = el.canvas.getContext("2d");
+const guideCtx = el.guideCanvas.getContext("2d");
 
 /* ------------------------------------------------------------------ *
  * State
@@ -236,6 +237,7 @@ const state = {
   sessionStartTs: 0,
   sessionPeak: 0,
   lastJointErrors: {},
+  lastAnalysis: null,
 };
 
 /* ------------------------------------------------------------------ *
@@ -321,6 +323,45 @@ const sfx = {
   },
   tap: () => blip(440, 0.04, "sine", 0.03),
 };
+
+/* ------------------------------------------------------------------ *
+ * Voice coaching (Web Speech API) — so you can hear cues while posing
+ * ------------------------------------------------------------------ */
+let lastSpokenText = "";
+let lastSpokenTs = 0;
+const VOICE_OK =
+  typeof window !== "undefined" && "speechSynthesis" in window;
+
+function speak(text, minGapMs = 6000) {
+  if (!state.sound || !text || !VOICE_OK) return;
+  const now = performance.now();
+  if (text === lastSpokenText && now - lastSpokenTs < 12000) return;
+  if (now - lastSpokenTs < minGapMs) return;
+  lastSpokenText = text;
+  lastSpokenTs = now;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.05;
+    u.pitch = 1;
+    u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* speech is best-effort */
+  }
+}
+
+function stopSpeaking() {
+  if (VOICE_OK) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      /* ignore */
+    }
+  }
+  lastSpokenText = "";
+  lastSpokenTs = 0;
+}
 
 /* ------------------------------------------------------------------ *
  * Home / library / stats rendering
@@ -476,7 +517,10 @@ function showScreen(name) {
   if (name === "library") renderLibrary();
   if (name === "stats") renderStats();
   if (name === "home") renderQuickStats();
-  if (name === "live") window.scrollTo(0, 0);
+  if (name === "live") {
+    window.scrollTo(0, 0);
+    startGuideLoop();
+  }
   // Leaving the camera should release it (and the camera light).
   if (prev === "live" && name !== "live" && state.running) stopCamera();
 }
@@ -707,6 +751,8 @@ async function startCamera() {
     refreshCameraButtons();
     renderGestureBar();
     updateGestureVisibility();
+    stopSpeaking();
+    speak("Camera ready. Step into view.", 0);
 
     if (isGameMode(state.mode)) showGameIntro();
 
@@ -742,6 +788,7 @@ function recordCurrentSession() {
 
 function stopCamera() {
   if (state.running) recordCurrentSession();
+  stopSpeaking();
   state.running = false;
   if (state.rafId) cancelAnimationFrame(state.rafId);
   state.rafId = 0;
@@ -787,7 +834,16 @@ function tick(ts) {
       if (result.landmarks && result.landmarks.length > 0) {
         const landmarks = result.landmarks[0];
         analysis = analyzeLandmarks(landmarks);
-        drawSkeleton(landmarks, analysis?.jointErrors || {});
+        const guide = guideForCurrentTarget(landmarks, analysis);
+        drawSkeleton(landmarks, analysis?.jointErrors || {}, guide, ts);
+        if (guide) {
+          drawGuideTargets(
+            landmarks,
+            guide,
+            analysis?.coaching?.joints || [],
+            ts
+          );
+        }
         updateGesture(landmarks, ts);
         drawGesturePointer(landmarks);
       } else {
@@ -805,6 +861,8 @@ function tick(ts) {
 }
 
 function onFrame(analysis, ts) {
+  state.lastAnalysis = analysis;
+
   // FPS
   state.frames += 1;
   const elapsed = ts - state.lastFpsTs;
@@ -883,7 +941,7 @@ function analyzeLandmarks(landmarks) {
  * Drawing
  * ------------------------------------------------------------------ */
 function jointColor(error) {
-  if (error == null) return "rgba(0, 200, 255, 0.95)";
+  if (error == null) return "rgba(34, 48, 42, 0.72)";
   if (error < 10) return "rgba(94, 228, 168, 0.95)";
   if (error < 20) return "rgba(240, 180, 41, 0.95)";
   return "rgba(240, 113, 120, 0.95)";
@@ -906,10 +964,11 @@ function landmarkErrorMap(jointErrors) {
   return map;
 }
 
-function drawSkeleton(landmarks, jointErrors = {}) {
+function drawSkeleton(landmarks, jointErrors = {}, guide = null, ts = 0) {
   const w = el.canvas.width;
   const h = el.canvas.height;
   ctx.clearRect(0, 0, w, h);
+  if (guide) drawGuideGhost(guide, ts, w, h);
   const errMap = landmarkErrorMap(jointErrors);
 
   ctx.lineWidth = Math.max(2, (w / 640) * 3);
@@ -945,6 +1004,150 @@ function drawSkeleton(landmarks, jointErrors = {}) {
 
 function clearCanvas() {
   ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
+}
+
+/* ------------------------------------------------------------------ *
+ * Pose guide — ghost overlay, directional arrows, animated picture
+ * ------------------------------------------------------------------ */
+function guideForCurrentTarget(landmarks, analysis) {
+  const target = targetPose();
+  if (!target || !hasGuide(target.name) || !landmarks) return null;
+  return mapGuideToBody(target.name, landmarks, !!analysis?.focusMatch?.mirrored);
+}
+
+function drawGuideGhost(guide, ts, w, h) {
+  const scale = Math.max(1, w / 640);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(86, 102, 201, 0.5)";
+  ctx.lineWidth = 8 * scale;
+  ctx.setLineDash([16 * scale, 12 * scale]);
+  ctx.lineDashOffset = -((ts / 40) % (28 * scale));
+  for (const [i, j] of SKELETON_EDGES) {
+    const a = guide[i];
+    const b = guide[j];
+    if (!a || !b) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x * w, a.y * h);
+    ctx.lineTo(b.x * w, b.y * h);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const key of Object.keys(guide)) {
+    const p = guide[key];
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, 3.2 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(86, 102, 201, 0.55)";
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawGuideTargets(landmarks, guide, joints, ts) {
+  if (!guide || !joints || !joints.length) return;
+  const w = el.canvas.width;
+  const h = el.canvas.height;
+  const scale = Math.max(1, w / 640);
+  const top = joints.filter((j) => j.error >= 12).slice(0, 3);
+  for (const j of top) {
+    const def = JOINT_DEFS[j.joint];
+    if (!def) continue;
+    const idx = def[2]; // the limb end that should move
+    const live = landmarks[idx];
+    const target = guide[idx];
+    if (!live || !target) continue;
+    if ((live.visibility ?? 1) < 0.4) continue;
+    const x = live.x * w;
+    const y = live.y * h;
+    const dx = target.x * w - x;
+    const dy = target.y * h - y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 16 * scale) continue;
+    drawNudgeArrow(x, y, dx / dist, dy / dist, Math.min(dist, 120 * scale), j.error, ts, scale);
+  }
+}
+
+function drawNudgeArrow(x, y, ux, uy, len, err, ts, scale) {
+  const color =
+    err >= 25 ? "rgba(196, 69, 61, 0.95)" : "rgba(180, 120, 28, 0.95)";
+  const r0 = (8 + Math.sin(ts / 180) * 2) * scale;
+  const bx = x + ux * r0;
+  const by = y + uy * r0;
+  const ex = x + ux * (r0 + len);
+  const ey = y + uy * (r0 + len);
+
+  ctx.save();
+  ctx.lineCap = "round";
+
+  // pulsing ring at the joint that needs attention
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3 * scale;
+  ctx.beginPath();
+  ctx.arc(x, y, r0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // soft halo then flowing dashes toward the target
+  ctx.strokeStyle = "rgba(255, 253, 248, 0.9)";
+  ctx.lineWidth = 7 * scale;
+  ctx.beginPath();
+  ctx.moveTo(bx, by);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4 * scale;
+  ctx.setLineDash([9 * scale, 7 * scale]);
+  ctx.lineDashOffset = -((ts / 22) % (16 * scale));
+  ctx.beginPath();
+  ctx.moveTo(bx, by);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // arrow head
+  const ang = Math.atan2(uy, ux);
+  const ah = 11 * scale;
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - ah * Math.cos(ang - 0.5), ey - ah * Math.sin(ang - 0.5));
+  ctx.lineTo(ex - ah * Math.cos(ang + 0.5), ey - ah * Math.sin(ang + 0.5));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
+let guideRafId = 0;
+function updateGuide(ts) {
+  const target = targetPose();
+  const best = state.lastAnalysis?.matches?.[0];
+  const name = target?.name || best?.pose?.name || null;
+  if (!name || !hasGuide(name)) {
+    el.poseGuide.hidden = true;
+    return;
+  }
+  el.poseGuide.hidden = false;
+  drawGuideCard(
+    guideCtx,
+    name,
+    el.guideCanvas.width,
+    el.guideCanvas.height,
+    ts
+  );
+}
+
+function guideLoop(ts) {
+  if (state.screen !== "live") {
+    guideRafId = 0;
+    return;
+  }
+  updateGuide(ts);
+  guideRafId = requestAnimationFrame(guideLoop);
+}
+
+function startGuideLoop() {
+  if (!guideRafId) guideRafId = requestAnimationFrame(guideLoop);
 }
 
 /* ------------------------------------------------------------------ *
@@ -1261,7 +1464,6 @@ function renderCoaching(coaching) {
       </li>`;
     el.jointMeters.hidden = true;
     el.jointMeters.innerHTML = "";
-    el.coachBanner.classList.remove("visible", "good");
     return;
   }
 
@@ -1313,12 +1515,13 @@ function renderCoaching(coaching) {
     el.jointMeters.hidden = true;
   }
 
-  const top = coaching.cues[0];
-  if (top) {
-    coachBannerTitle.textContent = top.title;
-    coachBannerDetail.textContent = top.detail;
-    el.coachBanner.classList.add("visible");
-    el.coachBanner.classList.toggle("good", top.priority === "good");
+  // Voice feedback — speak the single most important correction.
+  if (coaching.formLevel === "excellent") {
+    speak("Great form. Hold it.", 9000);
+  } else {
+    const top =
+      coaching.cues.find((c) => c.priority === "primary") || coaching.cues[0];
+    if (top && top.title) speak(top.title, 6000);
   }
 }
 
@@ -1466,6 +1669,8 @@ function beginGame() {
   updateGameHud();
   renderGestureBar();
   sfx.tap();
+  stopSpeaking();
+  speak(`${state.game.cfg.label}. Go!`, 0);
 }
 
 function handleGameEvent(ev) {
@@ -1521,6 +1726,8 @@ function endGame(results) {
   el.targetChip.hidden = true;
   renderQuickStats();
   renderGestureBar();
+  stopSpeaking();
+  speak(`Session complete. ${results.score} points.`, 0);
 }
 
 /* ------------------------------------------------------------------ *
@@ -1592,7 +1799,13 @@ function wireEvents() {
     state.sound = !state.sound;
     el.soundBtn.textContent = state.sound ? "🔊" : "🔇";
     el.soundBtn.classList.toggle("sound-off", !state.sound);
-    if (state.sound) sfx.tap();
+    if (state.sound) {
+      sfx.tap();
+      speak("Voice on");
+    } else {
+      stopSpeaking();
+      toast("Sound & voice off");
+    }
   });
 
   el.sheetHandle.addEventListener("click", () => {
@@ -1633,6 +1846,48 @@ function wireEvents() {
 }
 
 /* ------------------------------------------------------------------ *
+ * Debug helpers (only used with ?debug=1)
+ * ------------------------------------------------------------------ */
+function debugDemo(poseName, mutate) {
+  const g = POSE_GUIDES[poseName];
+  if (!g) return { error: "no guide" };
+  el.canvas.width = 640;
+  el.canvas.height = 480;
+  const landmarks = [];
+  for (let i = 0; i < 33; i++) {
+    landmarks[i] = { x: 0.5, y: 0.5, z: 0, visibility: 0 };
+  }
+  for (const k of Object.keys(g)) {
+    landmarks[k] = {
+      x: g[k][0] * 0.8 + 0.1,
+      y: g[k][1] * 0.9 + 0.05,
+      z: 0,
+      visibility: 1,
+    };
+  }
+  if (mutate && landmarks[mutate.idx]) {
+    landmarks[mutate.idx].x += mutate.dx || 0;
+    landmarks[mutate.idx].y += mutate.dy || 0;
+  }
+  state.mode = "practice";
+  const p = POSES.find((x) => x.name === poseName);
+  if (p) state.practicePose = p;
+  const analysis = analyzeLandmarks(landmarks);
+  const ts = performance.now();
+  const guide = guideForCurrentTarget(landmarks, analysis);
+  drawSkeleton(landmarks, analysis?.jointErrors || {}, guide, ts);
+  if (guide) {
+    drawGuideTargets(landmarks, guide, analysis?.coaching?.joints || [], ts);
+  }
+  return {
+    score: Math.round(analysis?.score ?? 0),
+    joints: (analysis?.coaching?.joints || [])
+      .slice(0, 3)
+      .map((j) => ({ joint: j.joint, error: Math.round(j.error) })),
+  };
+}
+
+/* ------------------------------------------------------------------ *
  * Init
  * ------------------------------------------------------------------ */
 function init() {
@@ -1667,6 +1922,7 @@ if (new URLSearchParams(location.search).has("debug")) {
     updateGesture,
     updateGestureVisibility,
     landmarkToElement,
+    debugDemo,
   };
 }
 

@@ -1176,6 +1176,30 @@ body.in-live .app {
   color: var(--accent-dim);
 }
 
+/* ---------------- Animated pose guide (the "do this" picture) ---------------- */
+.pose-guide {
+  position: absolute;
+  left: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 112px;
+  padding: 0.4rem;
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.82);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 6px 20px rgba(50, 40, 24, 0.18);
+  pointer-events: none;
+}
+.pose-guide canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
 /* ---------------- Gesture (hands-free) control ---------------- */
 .gesture-bar {
   position: absolute;

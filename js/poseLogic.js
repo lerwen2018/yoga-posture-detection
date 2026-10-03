@@ -41,8 +41,12 @@ export function computeAngles(landmarks, minVis = 0.4) {
 /**
  * Score live angles against a target pose.
  * delta = live - ideal  (positive = more open/straight than target)
+ *
+ * A small deadzone means tiny deviations are "free", and `tolerance` lets
+ * harder-to-judge poses (e.g. Chair, where flexion points at the camera) be
+ * more forgiving.
  */
-function scorePose(live, target, mirror = false) {
+function scorePose(live, target, mirror = false, tolerance = 1) {
   const errors = {};
   const deltas = {}; // joint key as labeled on target → signed delta
   const liveKeys = {}; // target joint → which live key was used
@@ -61,14 +65,18 @@ function scorePose(live, target, mirror = false) {
   }
   if (count === 0) return { score: 0, errors, deltas, liveKeys, mirrored: mirror };
   const avg = total / count;
-  const score = Math.max(0, 100 * (1 - avg / 45));
+  const DEADZONE = 7; // degrees that don't count against you
+  const RANGE = 48 * tolerance; // degrees of error that map to a zero score
+  const eff = Math.max(0, avg - DEADZONE);
+  const score = Math.max(0, Math.min(100, 100 * (1 - eff / RANGE)));
   return { score, errors, deltas, liveKeys, mirrored: mirror };
 }
 
 export function matchPoses(liveAngles) {
   const results = POSES.map((pose) => {
-    const s1 = scorePose(liveAngles, pose.angles, false);
-    const s2 = scorePose(liveAngles, pose.angles, true);
+    const tolerance = pose.tolerance || 1;
+    const s1 = scorePose(liveAngles, pose.angles, false, tolerance);
+    const s2 = scorePose(liveAngles, pose.angles, true, tolerance);
     const best = s2.score > s1.score ? s2 : s1;
     return {
       pose,
