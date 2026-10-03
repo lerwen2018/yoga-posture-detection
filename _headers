@@ -2,6 +2,10 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
+/models/*
+  Cache-Control: public, max-age=86400
+  Content-Type: application/octet-stream
+
 /js/*
   Cache-Control: public, max-age=300
 

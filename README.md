@@ -1,41 +1,42 @@
 # Yoga Posture Detection
 
-Browser-based yoga pose detection with MediaPipe (runs on-device in your webcam).  
+Browser-based yoga pose detection with MediaPipe (runs on-device in your webcam).
 Live site: **https://yoga.lerwenliu.org**
 
 ## Local
 
 ```bash
-# from this folder
 python3 -m http.server 8787
 # open http://127.0.0.1:8787
 ```
 
 ## How production works
 
-**https://yoga.lerwenliu.org** is a Cloudflare Worker that serves files **live from this GitHub repo** (`main` branch via `raw.githubusercontent.com`).
+**https://yoga.lerwenliu.org** is a **Cloudflare Worker** (`yoga-posture-detection`)
+that serves the static site from this project's `web/public` directory using
+**Workers Static Assets**, deployed with **Wrangler**. The pose model ships with
+the assets, so detection works offline too.
 
-Update the site by pushing to `main` — no separate deploy step required (allow ~1 minute for cache).
-
-```bash
-git add -A && git commit -m "Update yoga app" && git push
-```
-
-### Optional: Cloudflare Pages + GitHub Actions
-
-If you prefer Pages CI instead of the Worker proxy, add a workflow (needs `workflow` scope on your `gh` token) and secrets:
-
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID` = `42d998688b843019809c9e00ed78abaf`
-
-Example command:
+Deploy from the main project folder:
 
 ```bash
-npx wrangler pages deploy . --project-name=yoga-posture-detection --branch=main
+./deploy.sh
+# or: cd web && npx wrangler deploy
 ```
+
+`web/public/_headers` sets security and cache headers; `web/src/worker.js` is the
+Worker entry point.
+
+> Pose detection always runs in the user's browser. The Worker only serves files.
+
+## About this repo
+
+This repository is a mirror of the deployed static output (`index.html`, `css/`,
+`js/`). The canonical source and Wrangler config live in the main
+`yoga-posture-detection` project (`web/`).
 
 ## Stack
 
 - MediaPipe Pose Landmarker (WASM) in the browser
 - Static HTML/CSS/JS (no build step)
-- Cloudflare Pages + custom domain
+- Cloudflare Workers + Wrangler (custom domain)
