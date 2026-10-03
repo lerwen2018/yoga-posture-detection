@@ -233,12 +233,24 @@
               <strong id="poseName">—</strong>
               <span id="poseSanskrit">Stand in frame to begin</span>
             </div>
-            <div class="score-ring" id="scoreRing">
-              <svg viewBox="0 0 120 120" aria-hidden="true">
-                <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
-                <circle class="ring-fg" cx="60" cy="60" r="52"></circle>
-              </svg>
-              <span id="scoreValue">0%</span>
+            <div class="bottom-hud">
+              <button
+                id="nextPoseBtn"
+                class="icon-btn glass"
+                type="button"
+                aria-label="Next pose"
+                title="Next pose"
+                hidden
+              >
+                ⏭
+              </button>
+              <div class="score-ring" id="scoreRing">
+                <svg viewBox="0 0 120 120" aria-hidden="true">
+                  <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+                  <circle class="ring-fg" cx="60" cy="60" r="52"></circle>
+                </svg>
+                <span id="scoreValue">0%</span>
+              </div>
             </div>
           </div>
 

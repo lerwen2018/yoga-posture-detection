@@ -43,6 +43,7 @@ const MODES = {
   auto: {
     id: "auto",
     name: "Free Flow",
+    short: "Flow",
     icon: "🌊",
     tag: "Detect",
     desc: "We recognise whatever pose you hold and coach you live.",
@@ -54,6 +55,7 @@ const MODES = {
   practice: {
     id: "practice",
     name: "Practice",
+    short: "Practice",
     icon: "🎯",
     tag: "Focus",
     desc: "Lock a single pose and perfect its alignment.",
@@ -65,6 +67,7 @@ const MODES = {
   rush: {
     id: "rush",
     name: "Pose Rush",
+    short: "Rush",
     icon: "⚡",
     tag: "Game",
     desc: "Beat the clock — hold each pose for points and combos.",
@@ -76,6 +79,7 @@ const MODES = {
   flow: {
     id: "flow",
     name: "Zen Flow",
+    short: "Zen",
     icon: "🧘",
     tag: "Game",
     desc: "Follow a calm sequence and build a streak.",
@@ -155,6 +159,8 @@ const el = {
   liveSheet: $("liveSheet"),
   sheetHandle: $("sheetHandle"),
   modeSwitch: $("modeSwitch"),
+  liveScreen: $("screen-live"),
+  nextPoseBtn: $("nextPoseBtn"),
   paneTabs: $("paneTabs"),
   formLevelPill: $("formLevelPill"),
   coachSummary: $("coachSummary"),
@@ -344,7 +350,9 @@ function renderModeSwitch() {
   el.modeSwitch.innerHTML = Object.values(MODES)
     .map(
       (m) =>
-        `<button class="btn btn-chip" data-mode="${m.id}" type="button">${m.icon} ${m.name}</button>`
+        `<button class="btn btn-chip" data-mode="${m.id}" type="button">${m.icon} ${
+          m.short || m.name
+        }</button>`
     )
     .join("");
 }
@@ -456,6 +464,7 @@ function renderStats() {
  * ------------------------------------------------------------------ */
 function showScreen(name) {
   if (!["home", "library", "stats", "live"].includes(name)) name = "home";
+  const prev = state.screen;
   state.screen = name;
   for (const s of document.querySelectorAll(".screen")) {
     s.classList.toggle("is-active", s.id === `screen-${name}`);
@@ -468,6 +477,8 @@ function showScreen(name) {
   if (name === "stats") renderStats();
   if (name === "home") renderQuickStats();
   if (name === "live") window.scrollTo(0, 0);
+  // Leaving the camera should release it (and the camera light).
+  if (prev === "live" && name !== "live" && state.running) stopCamera();
 }
 
 function setPane(pane) {
@@ -500,6 +511,7 @@ function updateModeChrome() {
   const practiceOn = state.mode === "practice";
   el.poseSelect.disabled = !practiceOn;
   el.cyclePoseBtn.disabled = !practiceOn;
+  el.nextPoseBtn.hidden = !practiceOn;
   el.practiceHint.textContent = practiceOn
     ? "Coaching targets only the selected pose."
     : isGameMode(state.mode)
@@ -1404,6 +1416,7 @@ function updateUI(analysis) {
 function updateGameHud() {
   const g = state.game;
   const playing = g && g.status === "playing";
+  el.liveScreen.classList.toggle("game-active", playing);
   if (!playing) {
     el.gameStrip.hidden = true;
     el.targetChip.hidden = true;
@@ -1605,6 +1618,7 @@ function wireEvents() {
   });
 
   el.cyclePoseBtn.addEventListener("click", () => cyclePose());
+  el.nextPoseBtn.addEventListener("click", () => cyclePose());
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
